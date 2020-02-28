@@ -163,9 +163,9 @@ function doPrint(cb: (value: string) => void, arg: string): void {
   }
 }
 
-function newDevelopmentContext(): vm$Context {
+async function newDevelopmentContext(): vm$Context {
   // $FlowFixMe: we know for sure this file will exist.
-  const cljsScript = new vm.Script(lumo.load('main.js'), {});
+  const cljsScript = new vm.Script(await lumo.load('main.js'), {});
 
   const context = {
     module,
@@ -207,7 +207,7 @@ function newDevelopmentContext(): vm$Context {
   return ctx;
 }
 
-function newClojureScriptContext(): vm$Context {
+async function newClojureScriptContext(): vm$Context {
   global.module = module;
   global.exports = exports;
   global.require = require;
@@ -291,15 +291,15 @@ export function setPrintFns(stream?: stream$Writable): void {
   ClojureScriptContext.cljs.core._STAR_print_newline_STAR_ = true;
 }
 
-function initClojureScriptEngine(opts: CLIOptsType): void {
+async function initClojureScriptEngine(opts: CLIOptsType): void {
   if (ClojureScriptContext != null) {
     return;
   }
   const { args } = opts;
 
   ClojureScriptContext = __DEV__
-    ? newDevelopmentContext()
-    : newClojureScriptContext();
+    ? await newDevelopmentContext()
+    : await newClojureScriptContext();
 
   // $FlowIssue: context can have globals
   ClojureScriptContext.cljs.user = {};
@@ -409,26 +409,26 @@ function executeScript(
   }
 }
 
-function executeScripts(scripts: [string, string][]): void {
-  scripts.forEach(([type, script]: [string, string]) => {
-    executeScript(script, type);
+async function executeScripts(scripts: [string, string][]): void {
+  await scripts.forEach(async ([type, script]: [string, string]) => {
+    await executeScript(script, type);
     if (process.exitCode != null) {
       process.exit();
     }
   });
 }
 
-function runMain(mainNS: string, args: string[]): void {
+async function runMain(mainNS: string, args: string[]): void {
   // $FlowIssue: context can have globals
-  ClojureScriptContext.lumo.repl.run_main.apply(null, [mainNS, ...args]);
+  await ClojureScriptContext.lumo.repl.run_main.apply(null, [mainNS, ...args]);
 }
 
-function runMainCliFn(): void {
+async function runMainCliFn(): void {
   // $FlowIssue: context can have globals
-  ClojureScriptContext.lumo.repl.run_main_cli_fn();
+  await ClojureScriptContext.lumo.repl.run_main_cli_fn();
 }
 
-function processStdin(): void {
+async function processStdin(): void {
   let code = '';
   process.stdin.on('data', (chunk: string) => {
     code += chunk;
@@ -437,21 +437,21 @@ function processStdin(): void {
     process.stderr.write('Error processing stdin.\n');
     process.exit(1);
   });
-  process.stdin.on('end', () => {
-    executeScript(code, 'text', false);
+  await process.stdin.on('end', async () => {
+    await executeScript(code, 'text', false);
   });
 }
 
 // Runs the namespaced cljs function passed into it, which should accept a
 // socket as its only argument
 // TODO: Is this really the best generalization? Should it be?
-export function runAcceptFN(
+export async function runAcceptFN(
   fn: string,
   socket?: net$Socket,
   acceptArgs?: Array<mixed>,
 ): void {
   // $FlowIssue: context can have globals
-  ClojureScriptContext.lumo.repl.run_accept_fn(fn, socket, acceptArgs);
+  await ClojureScriptContext.lumo.repl.run_accept_fn(fn, socket, acceptArgs);
 }
 
 type ReplOptsType = {
@@ -525,32 +525,32 @@ async function startClojureScriptEngine(opts: CLIOptsType): Promise<void> {
   }
 
   if (scripts.length > 0) {
-    initClojureScriptEngine(opts);
-    executeScripts(scripts);
+    await initClojureScriptEngine(opts);
+    await executeScripts(scripts);
   }
 
   if (mainScript) {
-    initClojureScriptEngine(opts);
+    await initClojureScriptEngine(opts);
     if (mainScript === '-') {
-      processStdin();
+      await processStdin();
     } else {
-      executeScript(mainScript, 'path');
+      await executeScript(mainScript, 'path');
     }
   }
 
   if (mainNsName) {
-    initClojureScriptEngine(opts);
-    runMain(mainNsName, args);
+    await initClojureScriptEngine(opts);
+    await runMain(mainNsName, args);
   }
 
   if (repl) {
-    process.nextTick(() => {
-      initClojureScriptEngine(opts);
+    await process.nextTick(async () => {
+      await initClojureScriptEngine(opts);
       if (!__DEV__) {
-        setPrintFns(new DiscardingSender());
+        await setPrintFns(new DiscardingSender());
       }
 
-      execute(
+      await execute(
         `(require '[lumo.repl
                     :refer [apropos find-doc all-ns ns-aliases ns-refers ns-map]
                     :refer-macros [dir doc source]])`,
@@ -561,15 +561,15 @@ async function startClojureScriptEngine(opts: CLIOptsType): Promise<void> {
         'cljs.user',
       );
 
-      setPrintFns();
+      await setPrintFns();
     });
 
-    startREPL(opts);
+    await startREPL(opts);
   }
 
   if (!mainNsName && !repl) {
-    initClojureScriptEngine(opts);
-    runMainCliFn();
+    await initClojureScriptEngine(opts);
+    await runMainCliFn();
   }
 }
 

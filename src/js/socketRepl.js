@@ -13,7 +13,7 @@ let sessionCount = 0;
 type AcceptFn = (socket: net$Socket) => void | string;
 
 // Default socket accept function. This opens a repl and handles the readline and repl lifecycle
-function openRepl(socket: net$Socket): void {
+async function openRepl(socket: net$Socket): void {
   const rl = readline.createInterface({
     input: socket,
     output: socket,
@@ -36,20 +36,20 @@ function openRepl(socket: net$Socket): void {
 
   rl.on('close', () => socket.destroy());
 
-  rl.output.write(createBanner());
+  rl.output.write(await createBanner());
   prompt(session, false, 'cljs.user');
 }
 
 // Calls the `accept` function on the socket and handles the socket lifecycle
-function handleConnection(
+async function handleConnection(
   socket: net$Socket,
   accept: AcceptFn,
   args: Array<mixed> = [],
 ): number {
   if (typeof accept === 'string') {
-    runAcceptFN(accept, socket, args);
+    await runAcceptFN(accept, socket, args);
   } else {
-    accept(socket);
+    await accept(socket);
   }
 
   // The index needs to be unique for the socket server, but not for anyone else.
@@ -77,7 +77,7 @@ export function close(): void {
   }
 }
 
-export function open({
+export async function open({
   port,
   host = 'localhost',
   accept = openRepl,
@@ -88,9 +88,9 @@ export function open({
   accept?: AcceptFn,
   args?: Array<mixed>,
 }): Promise<mixed> {
-  return new Promise((resolve: mixed => void, reject: Error => void) => {
-    socketServer = net.createServer((socket: net$Socket) =>
-      handleConnection(socket, accept, args),
+  return new Promise(async (resolve: mixed => void, reject: Error => void) => {
+    socketServer = await net.createServer(async (socket: net$Socket) =>
+      await handleConnection(socket, accept, args),
     );
 
     // $FlowIssue - wrong type definitions for `listen`

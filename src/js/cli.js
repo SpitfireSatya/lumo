@@ -1,3 +1,4 @@
+/* eslint-disable no-return-await */
 /* @flow */
 
 import v8 from 'v8';
@@ -36,9 +37,9 @@ export type CLIOptsType = {
   args: string[],
 };
 
-export function createBanner(): string {
+export async function createBanner(): string {
   // $FlowFixMe: we know for sure this file will exist.
-  const cljsVersion: string = lumo.load('clojurescript-version');
+  const cljsVersion: string = await lumo.load('clojurescript-version');
   return `Lumo ${lumoVersion}
 ClojureScript ${cljsVersion}
 Node.js ${process.version}
@@ -50,8 +51,8 @@ Node.js ${process.version}
 `;
 }
 
-function printBanner(): void {
-  process.stdout.write(createBanner());
+async function printBanner(): void {
+  process.stdout.write(await createBanner());
 }
 
 function printVersion(): void {
@@ -260,7 +261,7 @@ function getCLIOpts(): CLIOptsType {
   return ret;
 }
 
-function startCLI(): mixed {
+async function startCLI(): mixed {
   const opts = getCLIOpts();
   const {
     args,
@@ -295,7 +296,7 @@ function startCLI(): mixed {
   }
 
   if (dumpSDK != null) {
-    return lumo.dumpSDK(dumpSDK);
+    return await lumo.dumpSDK(dumpSDK);
   }
 
   v8.setFlagsFromString('--use_strict');
@@ -320,7 +321,7 @@ function startCLI(): mixed {
     const srcPaths = util.srcPathsFromClasspathStrings(classpath);
 
     opts.classpath = srcPaths;
-    lumo.addSourcePaths(srcPaths);
+    await lumo.addSourcePaths(srcPaths);
   }
 
   if (dependencies.length !== 0) {
@@ -329,14 +330,14 @@ function startCLI(): mixed {
       localRepo,
     );
     opts.classpath.push(...mvnPaths);
-    lumo.addSourcePaths(mvnPaths);
+    await lumo.addSourcePaths(mvnPaths);
   }
 
   if (opts.repl && !quiet) {
-    printBanner();
+    await printBanner();
   }
 
-  return startClojureScriptEngine(opts);
+  return await startClojureScriptEngine(opts);
 }
 
 export default startCLI;

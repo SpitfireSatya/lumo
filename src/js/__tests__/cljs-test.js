@@ -130,8 +130,8 @@ describe('startClojureScriptEngine', () => {
 });
 
 describe('misc fns', () => {
-  beforeEach(async () => {
-    await startCLJS({
+  beforeEach(() => {
+    startCLJS({
       repl: true,
       scripts: [],
     });
@@ -171,7 +171,7 @@ describe('lumoEval', () => {
       });
       jest.runAllTicks();
 
-      vm.ctx.$$LUMO_GLOBALS.eval('source');
+      await vm.ctx.$$LUMO_GLOBALS.eval('source');
       expect(vm.runInContext).toHaveBeenCalledTimes(1);
     });
   });

@@ -11,31 +11,32 @@ jest.mock('jszip');
 require('jszip');
 
 describe('lumo', () => {
-  const { readFileSync, existsSync } = fs;
+  const { existsSync } = fs;
+  const { readFile } = fs.promises;
 
   beforeEach(() => {
-    fs.readFileSync = jest.fn((p: string) => {
+    fs.promises.readFile = jest.fn((p: string) => {
       if (/foo/.test(p)) {
-        return 'fooContents';
+        return Promise.resolve('fooContents');
       }
       throw new Error(`file doesn't exist: ${p}`);
     });
   });
 
   afterEach(() => {
-    fs.readFileSync = readFileSync;
+    fs.promises.readFile = readFile;
     fs.existsSync = existsSync;
   });
 
   describe('load', () => {
     describe('in __DEV__', () => {
       fs.existsSync = jest.fn(() => true);
-      it('returns the contents of a (bundled) file when it exists', () => {
-        expect(lumo.load('foo')).toBe('fooContents');
+      it('returns the contents of a (bundled) file when it exists', async () => {
+        expect(await lumo.load('foo')).toBe('fooContents');
       });
 
-      it("returns null when a file doesn't exist", () => {
-        expect(lumo.load('nonExistent')).toBe(null);
+      it("returns null when a file doesn't exist", async () => {
+        expect(await lumo.load('nonExistent')).toBe(null);
       });
     });
 
@@ -69,12 +70,12 @@ describe('lumo', () => {
         delete global.lumo;
       });
 
-      it('returns the contents of a (bundled) file when it exists', () => {
-        expect(lumo.load('foo')).toBe('fooContents');
+      it('returns the contents of a (bundled) file when it exists', async () => {
+        expect(await lumo.load('foo')).toBe('fooContents');
       });
 
-      it("returns null when a file doesn't exist", () => {
-        expect(lumo.load('nonExistent')).toBe(null);
+      it("returns null when a file doesn't exist", async () => {
+        expect(await lumo.load('nonExistent')).toBe(null);
       });
     });
   });
@@ -91,25 +92,25 @@ describe('lumo', () => {
       fs.statSync = statSync;
     });
 
-    it('returns the contents of a (cached) file when it exists', () => {
-      expect(lumo.readCache('foo')).toEqual({
+    it('returns the contents of a (cached) file when it exists', async () => {
+      expect(await lumo.readCache('foo')).toEqual({
         source: 'fooContents',
         modified: expect.any(Number),
       });
     });
 
-    it("returns null when a file doesn't exist", () => {
-      expect(lumo.readCache('nonExistent')).toBe(null);
+    it("returns null when a file doesn't exist", async () => {
+      expect(await lumo.readCache('nonExistent')).toBe(null);
     });
   });
 
   describe('writeCache', () => {
-    const { writeFileSync } = fs;
+    const { writeFile } = fs.promises;
     beforeEach(() => {
-      fs.writeFileSync = jest.fn(
+      fs.promises.writeFile = jest.fn(
         (fname: string, contents: string, encoding: string) => {
           if (/foo/.test(fname)) {
-            return;
+            return Promise.resolve();
           }
           throw new Error('some error');
         },
@@ -117,15 +118,15 @@ describe('lumo', () => {
     });
 
     afterEach(() => {
-      fs.writeFileSync = writeFileSync;
+      fs.writeFileSync = writeFile;
     });
 
-    it('writes correctly if directory exists', () => {
-      expect(lumo.writeCache('foo', 'bar')).toBeUndefined();
+    it('writes correctly if directory exists', async () => {
+      expect(await lumo.writeCache('foo', 'bar')).toBeUndefined();
     });
 
-    it("catches and returns an error if it can't write", () => {
-      expect(lumo.writeCache('nonExistent', 'contents')).toBeInstanceOf(Error);
+    it("catches and returns an error if it can't write", async () => {
+      expect(await lumo.writeCache('nonExistent', 'contents')).toBeInstanceOf(Error);
     });
   });
 
@@ -142,17 +143,17 @@ describe('lumo', () => {
       path.resolve = pathResolve;
     });
 
-    it('cycles through the source paths', () => {
+    it('cycles through the source paths', async () => {
       const srcPaths = ['a', 'b', 'c'];
-      lumo.addSourcePaths(srcPaths);
+      await lumo.addSourcePaths(srcPaths);
       const lumoPaths = [process.cwd(), ...srcPaths];
 
-      fs.readFileSync = jest.fn((filename: string) => {
+      fs.promises.readFile = jest.fn((filename: string) => {
         throw new Error(`file doesn't exist: ${filename}`);
       });
 
-      const source = lumo.readSource('bar/baz');
-      const mockCalls = fs.readFileSync.mock.calls;
+      const source = await lumo.readSource('bar/baz');
+      const mockCalls = fs.promises.readFile.mock.calls;
 
       expect(source).toBe(null);
       expect(
@@ -167,11 +168,11 @@ describe('lumo', () => {
     });
 
     describe('reads JAR archives', () => {
-      it('should return the source when JAR has the source', () => {
+      it('should return the source when JAR has the source', async () => {
         const srcPaths = ['foo.jar'];
-        lumo.addSourcePaths(srcPaths);
+        await lumo.addSourcePaths(srcPaths);
 
-        const source = lumo.readSource('some/thing');
+        const source = await lumo.readSource('some/thing');
 
         expect(source).toEqual({
           source: 'zipContents',
@@ -179,8 +180,8 @@ describe('lumo', () => {
         });
       });
 
-      it("should return null when the JAR doesn't have the source", () => {
-        const source = lumo.readSource('some/thing');
+      it("should return null when the JAR doesn't have the source", async () => {
+        const source = await lumo.readSource('some/thing');
 
         expect(source).toBe(null);
       });
@@ -193,26 +194,26 @@ describe('lumo', () => {
       lumo = require('../lumo'); // eslint-disable-line global-require
     });
 
-    it('should return an array with the file contents when JAR has deps.cljs', () => {
+    it('should return an array with the file contents when JAR has deps.cljs', async () => {
       const srcPaths = ['foo.jar'];
-      lumo.addSourcePaths(srcPaths);
+      await lumo.addSourcePaths(srcPaths);
 
-      const source = lumo.loadUpstreamJsLibs('some/thing');
+      const source = await lumo.loadUpstreamJsLibs('some/thing');
 
       expect(source).toEqual(['zipContents']);
     });
 
-    it("should return an empty array when the JAR doesn't have deps.cljs", () => {
-      const source = lumo.loadUpstreamJsLibs('some/thing');
+    it("should return an empty array when the JAR doesn't have deps.cljs", async () => {
+      const source = await lumo.loadUpstreamJsLibs('some/thing');
 
       expect(source).toEqual([]);
     });
 
-    it("shouldn't crash when a JAR isn't found", () => {
+    it("shouldn't crash when a JAR isn't found", async () => {
       const srcPaths = ['bar.jar'];
-      lumo.addSourcePaths(srcPaths);
+      await lumo.addSourcePaths(srcPaths);
 
-      const source = lumo.loadUpstreamJsLibs('some/thing');
+      const source = await lumo.loadUpstreamJsLibs('some/thing');
 
       expect(source).toEqual([]);
     });
@@ -231,14 +232,14 @@ describe('lumo', () => {
       path.resolve = pathResolve;
     });
 
-    it('cycles through the source paths', () => {
+    it('cycles through the source paths', async () => {
       const srcPaths = ['a', 'b', 'c'];
-      lumo.addSourcePaths(srcPaths);
+      await lumo.addSourcePaths(srcPaths);
       const lumoPaths = [process.cwd(), ...srcPaths];
 
       fs.existsSync = jest.fn((_: string) => false);
 
-      const exists = lumo.resource('bar/baz');
+      const exists = await lumo.resource('bar/baz');
       const mockCalls = fs.existsSync.mock.calls;
 
       expect(exists).toBe(null);
@@ -250,29 +251,29 @@ describe('lumo', () => {
       );
     });
 
-    it('returns the representation for the resource when it exists', () => {
+    it('returns the representation for the resource when it exists', async () => {
       fs.existsSync = jest.fn((_: string) => true);
-      expect(lumo.resource('some-file')).toEqual({
+      expect(await lumo.resource('some-file')).toEqual({
         type: 'bundled',
         src: 'some-file',
       });
     });
 
     describe('reads JAR archives', () => {
-      it('should return true when JAR has the file', () => {
+      it('should return true when JAR has the file', async () => {
         const srcPaths = ['foo.jar'];
-        lumo.addSourcePaths(srcPaths);
+        await lumo.addSourcePaths(srcPaths);
 
         fs.existsSync = jest.fn((fname: string) => /foo/.test(fname));
 
-        expect(lumo.resource('some/thing')).toMatchObject({
+        expect(await lumo.resource('some/thing')).toMatchObject({
           type: 'jar',
           src: 'some/thing',
         });
       });
 
-      it("should return false when the JAR doesn't have the file", () => {
-        expect(lumo.resource('some/thing')).toBe(null);
+      it("should return false when the JAR doesn't have the file", async () => {
+        expect(await lumo.resource('some/thing')).toBe(null);
       });
     });
   });

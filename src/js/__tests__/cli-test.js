@@ -523,12 +523,12 @@ describe('print Functions', () => {
       });
     });
 
-    it('should print the banner to stdout', () => {
+    it('should print the banner to stdout', async () => {
       Object.defineProperty(process, 'argv', {
         value: ['', ''],
       });
 
-      startCLI();
+      await startCLI();
       expect(process.stdout.write.mock.calls).toMatchSnapshot();
     });
 

@@ -332,11 +332,11 @@ describe('startREPL', () => {
         repl.createSession = replCreateSession;
       });
 
-      it('that are isolated by unique and incrementing ids', () => {
-        startREPL({});
+      it('that are isolated by unique and incrementing ids', async () => {
+        await startREPL({});
 
-        expect(handleConnection(socket)).toBe(1);
-        expect(handleConnection(socket)).toBe(2);
+        expect(await handleConnection(socket)).toBe(1);
+        expect(await handleConnection(socket)).toBe(2);
       });
     });
   });

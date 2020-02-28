@@ -72,8 +72,8 @@ describe('open', () => {
     process.on = processOn;
   });
 
-  it('creates a server listening on a specified host and port', () => {
-    socketRepl.open({ port: serverPort, host: serverHost });
+  it('creates a server listening on a specified host and port', async () => {
+    await socketRepl.open({ port: serverPort, host: serverHost });
 
     expect(socketServer.listen).toHaveBeenCalledTimes(1);
     expect(socketServer.listen.mock.calls[0].slice(0, 2)).toEqual([
@@ -82,8 +82,8 @@ describe('open', () => {
     ]);
   });
 
-  it('registers process handlers for SIGHUP & SIGTERM', () => {
-    socketRepl.open({ port: serverPort, host: serverHost });
+  it('registers process handlers for SIGHUP & SIGTERM', async () => {
+    await socketRepl.open({ port: serverPort, host: serverHost });
 
     expect(process.on).toHaveBeenCalledTimes(2);
     expect(
@@ -91,8 +91,8 @@ describe('open', () => {
     ).toEqual(['SIGTERM', 'SIGHUP']);
   });
 
-  it('defaults to localhost if no host specified', () => {
-    socketRepl.open({ port: serverPort });
+  it('defaults to localhost if no host specified', async () => {
+    await socketRepl.open({ port: serverPort });
 
     expect(socketServer.listen).toHaveBeenCalledTimes(1);
     expect(socketServer.listen.mock.calls[0].slice(0, 2)).toEqual([
@@ -137,11 +137,13 @@ describe('close', () => {
     expect(net.Server.prototype.close).not.toHaveBeenCalled();
   });
 
-  it('closes the server', () => {
-    socketRepl.open({ port: serverPort, host: serverHost });
-    socketRepl.close();
+  it('closes the server', async () => {
+    socketRepl.open({ port: serverPort, host: serverHost })
+    .then(() => {
+      socketRepl.close();
+      expect(net.Server.prototype.close).toHaveBeenCalledTimes(1);
+    });
 
-    expect(net.Server.prototype.close).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -176,15 +178,15 @@ describe('handleConnection', () => {
     net.Socket.prototype.on = netSocketOn;
   });
 
-  it('prints welcome message and prompt', () => {
+  it('prints welcome message and prompt', async () => {
     mockCreateSession();
-    handleConnection(socket);
+    await handleConnection(socket);
     expect(socket.write).toHaveBeenCalled();
   });
 
-  it('tears down every active socket connection on close', () => {
+  it('tears down every active socket connection on close', async () => {
     mockCreateSession();
-    handleConnection(socket);
+    await handleConnection(socket);
     socket.destroy = jest.fn();
     socketRepl.close();
     expect(socket.destroy).toHaveBeenCalled();

@@ -1,18 +1,22 @@
+/* eslint-disable no-await-in-loop */
+/* eslint-disable no-return-await */
+/* eslint-disable flowtype/require-parameter-type */
+/* eslint-disable flowtype/require-return-type */
 const path = require('path');
 const fs = require('fs');
 
 function accessor(key) {
-  var resource = lumo.internal.embedded.resources[key];
+  const resource = lumo.internal.embedded.resources[key];
   if (resource != null) {
     return Buffer.from(resource, 'base64');
   }
 }
 
-function encode(filePath) {
-  return fs.readFileSync(filePath).toString('base64');
+async function encode(filePath) {
+  return await fs.promises.readFile(filePath).toString('base64');
 }
 
-function embed(resourceFiles = [], resourceRoot = '') {
+async function embed(resourceFiles = [], resourceRoot = '') {
   if (!Array.isArray(resourceFiles)) {
     throw new Error('Bad Argument: resourceFiles is not an array');
   }
@@ -21,8 +25,8 @@ function embed(resourceFiles = [], resourceRoot = '') {
     '\nlumo.internal={embedded: {}};lumo.internal.embedded.resources={\n';
   for (let i = 0; i < resourceFiles.length; i++) {
     buffer +=
-      JSON.stringify(path.relative(resourceRoot, resourceFiles[i])) + ':"';
-    buffer += encode(resourceFiles[i]) + '",\n';
+      `${JSON.stringify(path.relative(resourceRoot, resourceFiles[i]))}:"`;
+    buffer += `${await encode(resourceFiles[i])}",\n`;
   }
 
   buffer +=

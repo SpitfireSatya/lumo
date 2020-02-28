@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop */
 /* @flow */
 
 import fs from 'fs';
@@ -17,12 +18,12 @@ type PackageJsonType = {
   },
 };
 
-function packageJson(nodeDir: string, moduleName: string): ?PackageJsonType {
+async function packageJson(nodeDir: string, moduleName: string): ?PackageJsonType {
   let pkgJson = null;
 
   try {
     pkgJson = JSON.parse(
-      fs.readFileSync(path.join(nodeDir, moduleName, 'package.json'), 'utf8'),
+      fs.promises.readFile(path.join(nodeDir, moduleName, 'package.json'), 'utf8'),
     );
   } catch (_) {} // eslint-disable-line no-empty
 
@@ -49,12 +50,12 @@ function inferClasspathLib(
   return libPath;
 }
 
-function scanModules(
+async function scanModules(
   libPaths: string[],
   baseDir: string,
   moduleName: string,
 ): string[] {
-  const pkgJson = packageJson(baseDir, moduleName);
+  const pkgJson = await packageJson(baseDir, moduleName);
 
   if (pkgJson) {
     const libPath = inferClasspathLib(baseDir, moduleName, pkgJson);
@@ -68,11 +69,11 @@ function scanModules(
       const modulePath = path.resolve(baseDir, moduleName);
 
       if (fs.lstatSync(modulePath).isDirectory()) {
-        newLibPaths = fs
-          .readdirSync(modulePath)
-          .reduce((acc: string[], childName: string) => {
+        newLibPaths = await (fs.promises
+          .readdir(modulePath))
+          .reduce(async (acc: string[], childName: string) => {
             const parentPath = path.join(baseDir, moduleName);
-            return acc.concat(scanModules(acc, parentPath, childName));
+            return acc.concat(await scanModules(acc, parentPath, childName));
           }, libPaths);
       }
     } catch (_) {} // eslint-disable-line no-empty
@@ -80,13 +81,13 @@ function scanModules(
   return newLibPaths;
 }
 
-function modulesByNodeDir(): Map<string, string[]> {
+async function modulesByNodeDir(): Map<string, string[]> {
   const moduleByDir: Map<string, string[]> = new Map();
 
   // $FlowIssue: it's there
-  Module._nodeModulePaths(process.cwd()).forEach((nodeDir: string) => {
+  await Module._nodeModulePaths(process.cwd()).forEach(async (nodeDir: string) => {
     try {
-      moduleByDir.set(nodeDir, fs.readdirSync(nodeDir));
+      moduleByDir.set(nodeDir, await fs.readdirSync(nodeDir));
     } catch (_) {} // eslint-disable-line no-empty
   });
 
@@ -94,14 +95,14 @@ function modulesByNodeDir(): Map<string, string[]> {
 }
 
 /* eslint-disable no-loop-func */
-function inferNodeModulesClasspathLibs(): string[] {
+async function inferNodeModulesClasspathLibs(): string[] {
   let result = [];
 
-  for (const [nodeDir, modules] of modulesByNodeDir()) {
+  for (const [nodeDir, modules] of await modulesByNodeDir()) {
     modules
       .filter((moduleName: string) => !moduleName.startsWith('.'))
-      .forEach((moduleName: string) => {
-        result = result.concat(scanModules([], nodeDir, moduleName));
+      .forEach(async (moduleName: string) => {
+        result = result.concat(await scanModules([], nodeDir, moduleName));
       });
   }
   return result;
@@ -118,7 +119,9 @@ const sourcePaths = {
   },
   // $FlowIssue: doesn't support getters yet
   get paths(): Set<string> {
-    return new Set([...this.manual, ...this.inferred]);
+    return this.inferred.then((values) => {
+      return new Set([...this.manual, ...values]);
+    });
   },
 };
 
@@ -153,10 +156,10 @@ function isBundled(filename: string): boolean {
   return lumo.internal.embedded.resources[fname] != null;
 }
 
-export function load(filename: string): ?string {
+export async function load(filename: string): ?string {
   if (__DEV__) {
     try {
-      return fs.readFileSync(`${__dirname}/${filename}`, 'utf8');
+      return await fs.promises.readFile(`${__dirname}/${filename}`, 'utf8');
     } catch (e) {
       return null;
     }
@@ -184,12 +187,12 @@ export function getGoogleClosureCompiler(): Function {
 }
 
 // TODO: cache JARs that we know have a given file / path
-export function readSource(filename: string): ?SourceType {
+export async function readSource(filename: string): ?SourceType {
   // $FlowIssue: getters not supported
-  for (const srcPath of sourcePaths.paths.values()) {
+  for (const srcPath of (await sourcePaths.paths).values()) {
     try {
       if (srcPath.endsWith('.jar')) {
-        const data = fs.readFileSync(srcPath);
+        const data = await fs.promises.readFile(srcPath);
         const zip = new JSZip().load(data);
         const file = zip.file(filename);
 
@@ -202,7 +205,7 @@ export function readSource(filename: string): ?SourceType {
       }
       const filePath = path.join(srcPath, filename);
       return {
-        source: fs.readFileSync(filePath, 'utf8'),
+        source: await fs.promises.readFile(filePath, 'utf8'),
         modified: fs.statSync(filePath).mtimeMs,
       };
     } catch (_) {} // eslint-disable-line no-empty
@@ -210,10 +213,10 @@ export function readSource(filename: string): ?SourceType {
   return null;
 }
 
-export function readFile(filename: string): ?SourceType {
+export async function readFile(filename: string): ?SourceType {
   try {
     return {
-      source: fs.readFileSync(filename, 'utf8'),
+      source: await fs.promises.readFile(filename, 'utf8'),
       modified: fs.statSync(filename).mtimeMs,
     };
   } catch (_) {} // eslint-disable-line no-empty
@@ -221,10 +224,10 @@ export function readFile(filename: string): ?SourceType {
   return null;
 }
 
-export function readCache(filename: string): ?SourceType {
+export async function readCache(filename: string): ?SourceType {
   try {
     return {
-      source: fs.readFileSync(filename, 'utf8'),
+      source: await fs.promises.readFile(filename, 'utf8'),
       modified: fs.statSync(filename).mtimeMs,
     };
   } catch (_) {
@@ -232,21 +235,21 @@ export function readCache(filename: string): ?SourceType {
   }
 }
 
-export function writeCache(filename: string, source: string): ?Error {
+export async function writeCache(filename: string, source: string): ?Error {
   try {
-    return fs.writeFileSync(filename, source, 'utf8');
+    return await fs.promises.writeFile(filename, source, 'utf8');
   } catch (e) {
     return e;
   }
 }
 
-export function loadUpstreamJsLibs(): string[] {
+export async function loadUpstreamJsLibs(): string[] {
   const ret = [];
   // $FlowIssue: getters not supported
-  for (const srcPath of sourcePaths.paths.values()) {
+  for (const srcPath of (await sourcePaths.paths).values()) {
     try {
       if (srcPath.endsWith('.jar')) {
-        const data = fs.readFileSync(srcPath);
+        const data = await fs.promises.readFile(srcPath);
         const zip = new JSZip().load(data);
         const source = zip.file('deps.cljs');
 
@@ -254,7 +257,7 @@ export function loadUpstreamJsLibs(): string[] {
           ret.push(source.asText());
         }
       } else {
-        const source = fs.readFileSync(path.join(srcPath, 'deps.cljs'), 'utf8');
+        const source = await fs.promises.readFile(path.join(srcPath, 'deps.cljs'), 'utf8');
         ret.push(source);
       }
     } catch (_) {} // eslint-disable-line no-empty
@@ -262,16 +265,16 @@ export function loadUpstreamJsLibs(): string[] {
   return ret;
 }
 
-export function loadUpstreamDataReaders(): { url: string, source: string }[] {
+export async function loadUpstreamDataReaders(): { url: string, source: string }[] {
   const ret = [];
   // $FlowIssue: getters not supported
-  for (const srcPath of sourcePaths.paths.values()) {
+  for (const srcPath of (await sourcePaths.paths).values()) {
     for (const filename of ['data_readers.cljs', 'data_readers.cljc']) {
       const url = path.join(srcPath, filename);
 
       try {
         if (srcPath.endsWith('.jar')) {
-          const data = fs.readFileSync(srcPath);
+          const data = fs.promises.readFile(srcPath);
           const zip = new JSZip().load(data);
           const source = zip.file(filename);
 
@@ -282,7 +285,7 @@ export function loadUpstreamDataReaders(): { url: string, source: string }[] {
             });
           }
         } else {
-          const source = fs.readFileSync(url, 'utf8');
+          const source = await fs.promises.readFile(url, 'utf8');
           ret.push({
             url,
             source,
@@ -294,7 +297,7 @@ export function loadUpstreamDataReaders(): { url: string, source: string }[] {
   return ret;
 }
 
-export function resource(filename: string): ?ResourceType {
+export async function resource(filename: string): ?ResourceType {
   if (isBundled(filename)) {
     return {
       type: 'bundled',
@@ -303,9 +306,9 @@ export function resource(filename: string): ?ResourceType {
   }
 
   // $FlowIssue: getters not supported
-  for (const srcPath of sourcePaths.paths.values()) {
+  for (const srcPath of (await sourcePaths.paths).values()) {
     if (srcPath.endsWith('.jar')) {
-      const data = fs.readFileSync(srcPath);
+      const data = await fs.promises.readFile(srcPath);
       const zip = new JSZip().load(data);
       const entries = zip.filter((pathInJar: string) => pathInJar === filename);
 
@@ -331,24 +334,24 @@ export function resource(filename: string): ?ResourceType {
   return null;
 }
 
-export function getSourcePaths(): string[] {
+export async function getSourcePaths(): string[] {
   // $FlowIssue: getters not supported
-  return [...sourcePaths.paths];
+  return [...(await sourcePaths.paths)];
 }
 
-export function addSourcePaths(srcPaths: string[]): void {
+export async function addSourcePaths(srcPaths: string[]): void {
   const expanded = srcPaths.map((srcPath: string) =>
     path.normalize(util.expandPath(srcPath)),
   );
 
-  expanded.forEach((p: string) => sourcePaths.manual.add(p));
+  await expanded.forEach(async (p: string) => sourcePaths.manual.add(p));
 }
 
-export function removeSourcePath(srcPath: string): boolean {
+export async function removeSourcePath(srcPath: string): boolean {
   return sourcePaths.manual.delete(util.expandPath(srcPath));
 }
 
-export function readSourceFromJar({
+export async function readSourceFromJar({
   jarPath,
   src,
 }: {
@@ -356,23 +359,23 @@ export function readSourceFromJar({
   jarPath: string,
   src: string,
 }): string {
-  const data = fs.readFileSync(jarPath);
+  const data = await fs.promises.readFile(jarPath);
   const zip = new JSZip().load(data);
   const source = zip.file(src);
 
   return source.asText();
 }
 
-export function readDirFromJar(jarPath: string, dir: string): string[] {
-  const data = fs.readFileSync(jarPath);
+export async function readDirFromJar(jarPath: string, dir: string): string[] {
+  const data = await fs.promises.readFile(jarPath);
   const zip = new JSZip().load(data);
 
   return zip.file(new RegExp(`^${dir}`)).map((x: { name: string }) => x.name);
 }
 
-export function dumpSDK(outdir: string): void {
+export async function dumpSDK(outdir: string): void {
   if (!__DEV__) {
-    lumo.internal.embedded.keys().forEach((res: string) => {
+    await lumo.internal.embedded.keys().forEach(async (res: string) => {
       const idx = res.lastIndexOf('/');
 
       if (idx !== -1) {
@@ -380,7 +383,7 @@ export function dumpSDK(outdir: string): void {
       }
 
       // $FlowFixMe: need to check result of res, but bundled resources will be
-      fs.writeFileSync(path.join(outdir, res), load(res), 'utf8');
+      await fs.promises.writeFile(path.join(outdir, res), await load(res), 'utf8');
     });
   }
 }
